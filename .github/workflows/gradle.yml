@@ -7,7 +7,9 @@
 
 name: Java CI with Gradle
 
+# 어떠한 이벤트 발생 시 workflow 실행할 지 명시한다
 on:
+  # 여기서는 master 브랜치에 push, PR 이벤트 발생 시 이벤트가 동작한다
   push:
     branches: [ "master" ]
   pull_request:
@@ -15,53 +17,62 @@ on:
 
 jobs:
   build:
-
+    # VM 실행 환경 지정 -> 현재는 우분투 최신 버전을 사용한다
     runs-on: ubuntu-latest
     permissions:
       contents: read
 
+    # 실행될 jobs를 순서대로 명시한다
     steps:
-    - uses: actions/checkout@v4
+    - name: Checkout
+      uses: actions/checkout@v3
+
+    # JDK 17 설치
     - name: Set up JDK 17
-      uses: actions/setup-java@v4
+      uses: actions/setup-java@v3
       with:
         java-version: '17'
         distribution: 'temurin'
 
-    # Configure Gradle for optimal use in GiHub Actions, including caching of downloaded dependencies.
-    # See: https://github.com/gradle/actions/blob/main/setup-gradle/README.md
-    - name: Setup Gradle
-      uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0
+    # Gradle build를 위한 권한 부여
+    - name: Grant execute permission for gradlew
+      run: chmod +x gradlew
 
-    - name: Build with Gradle Wrapper
-      run: ./gradlew build
+    # Gradle build (test 제외)
+    - name: Build with Gradle
+      run: ./gradlew clean build --exclude-task test
 
-    # NOTE: The Gradle Wrapper is the default and recommended way to run Gradle (https://docs.gradle.org/current/userguide/gradle_wrapper.html).
-    # If your project does not have the Gradle Wrapper configured, you can use the following configuration to run Gradle with a specified version.
-    #
-    # - name: Setup Gradle
-    #   uses: gradle/actions/setup-gradle@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0
-    #   with:
-    #     gradle-version: '8.5'
-    #
-    # - name: Build with Gradle 8.5
-    #   run: gradle build
-
-  dependency-submission:
-
-    runs-on: ubuntu-latest
-    permissions:
-      contents: write
-
-    steps:
-    - uses: actions/checkout@v4
-    - name: Set up JDK 17
-      uses: actions/setup-java@v4
+    # Dockerhub 로그인
+    - name: Dockerhub Login
+      uses: docker/login-action@v2
       with:
-        java-version: '17'
-        distribution: 'temurin'
+        username: ${{ secrets.DOCKERHUB_USERNAME }}
+        password: ${{ secrets.DOCKERHUB_PASSWORD }}
 
-    # Generates and submits a dependency graph, enabling Dependabot Alerts for all project dependencies.
-    # See: https://github.com/gradle/actions/blob/main/dependency-submission/README.md
-    - name: Generate and submit dependency graph
-      uses: gradle/actions/dependency-submission@ec92e829475ac0c2315ea8f9eced72db85bb337a # v3.0.0
+    # Docker 이미지 빌드
+    - name: Docker Image Build
+      run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.PROJECT_NAME }} .
+
+    # Push to DockerHub
+    - name: DockerHub Push
+      run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.PROJECT_NAME }}
+
+    # AWS EC2 접속 및 APP 실행
+    - name: Run AWS EC2 Spring Boot Application
+      uses: appleboy/ssh-action@v0.1.6
+      with:
+        hosts: ${{ secrets.EC2_HOST }}
+        username: ${{ secrets.EC2_USERNAME }}
+        key: ${{ secrets.EC2_KEY }}
+
+      script: |
+        sudo docker kill ${{ secrets.PROJECT_NAME }}
+        sudo docker rm -f ${{ secrets.PROJECT_NAME }}
+        sudo docker rmi ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.PROJECT_NAME }}
+        sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/${{ secrets.PROJECT_NAME }}
+
+        sudo docker run -p ${{ secrets.PORT }}:${{ secrets.PORT }} \
+        --name ${{ secrets.PROJECT_NAME }} \
+        -e SPRING_DATASOURCE_URL=${{ secrets.DB_URL }} \
+        -e SPRING_DATASOURCE_USERNAME=${{ secrets.DB_USERNAME }} \
+    
