@@ -51,4 +51,4 @@ jobs:
 
       # DockerHub 이미지 PUSH, 기존에 생성해 둔 PRIVATE REGISTRY에 이미지를 업로드 한다
       - name: docker hub push
-        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest
