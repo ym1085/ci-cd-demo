@@ -20,7 +20,9 @@ permissions:
   contents: read
 
 jobs:
-  # spring-boot APP -> build -> push to DockerHub
+  # spring-boot 애플리케이션을 build(빌드) 하여  DockerHub에 push 하는 JOB을 의미한다
+  # CD(Continuous Delivery)는 위 부분이 끝난 후에, 따로 실행하는 프로세스로 구분하자
+  # 내 생각에는 build + test 하는 부분까지 넣어줘야 할 듯, 현재는 bootJar -> TEST 수행 없이 지나감
   build-docker-image:
     runs-on: ubuntu-latest
     steps:
