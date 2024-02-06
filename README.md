@@ -100,7 +100,7 @@ FROM openjdk:17-jdk-slim
 
 - 베이스 도커 이미지를 설정하는 경우 사용
 - 즉, 어떤 이미지를 기반으로 사용할지 지정하는 것
-- 
+
 ### WORKDIR /apps
 
 ```dockerfile
