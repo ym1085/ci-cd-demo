@@ -1,0 +1,87 @@
+# This workflow uses actions that are not certified by GitHub.
+# They are provided by a third-party and are governed by
+# separate terms of service, privacy policy, and support
+# documentation.
+# This workflow will build a Java project with Gradle and cache/restore any dependencies to improve the workflow execution time
+# For more information see: https://docs.github.com/en/actions/automating-builds-and-tests/building-and-testing-java-with-gradle
+
+name: Java CI with Gradle
+
+# 어떠한 이벤트 발생 시 workflow 실행할 지 명시한다
+# 동작 조건을 설정하는 것인데 -> main 브랜치에 push / PR 발생 시 동작
+on:
+  # 여기서 master 브랜치에 push, PR 이벤트 발생 시 이벤트가 동작한다
+  push:
+    branches: [ "master" ]
+  pull_request:
+    branches: [ "master" ]
+
+permissions:
+  contents: read
+
+jobs:
+  # spring-boot 애플리케이션을 build(빌드) 하여  DockerHub에 push 하는 JOB을 의미한다
+  # CD(Continuous Delivery)는 위 부분이 끝난 후에, 따로 실행하는 프로세스로 구분하자
+  # 내 생각에는 build + test 하는 부분까지 넣어줘야 할 듯, 현재는 bootJar -> TEST 수행 없이 지나감
+  build-docker-image:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      # JDK 17 셋팅
+      - name: Set up JDK 17
+        uses: actions/setup-java@v3
+        with:
+          java-version: '17'
+          distribution: 'temurin'
+
+      # Spring Boot APP(Gradle) 빌드
+      - name: Build with Gradle
+        uses: gradle/gradle-build-action@67421db6bd0bf253fb4bd25b31ebb98943c375e1
+        with:
+          arguments: clean bootJar
+
+      # Docker 이미지 빌드
+      - name: docker image build
+        run: docker build -t ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest .
+
+      # DockerHub 로그인
+      - name: docker login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
+      # DockerHub 이미지 PUSH, 기존에 생성해 둔 PRIVATE REGISTRY에 이미지를 업로드 한다
+      - name: docker hub push
+        run: docker push ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest
+
+  run-docker-image-on-ec2:
+    # build-docker-image jobs가 완료되어야 실행된다
+    # 즉, 위에 선언된 job(build-docker-image)이 끝난후에 run-docker-image-on-ec2를 실행하겠다는 의미이다
+    needs: build-docker-image
+
+    # self-hosted를 통해 AWS EC2에서 이후 명령이 동작하도록 한다
+    runs-on: self-hosted
+
+    steps:
+      # 최신 이미지를 PULL 받는다
+      - name: Pulling Docker image
+        run: sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest
+
+      # 기존 컨테이너가 실행중이라면 중지를 진행한다
+      # $(sudo docker ps -q) // -q : quiet의 약자로 실행중인 컨테이너 전체 목록이 아닌 컨테이너 ID만 출력
+      # 2>
+      # /dev/numm : Linux 상에서 'black hole'로 작동하여 이곳으로 보내진 모든 데이터 삭제
+      # || true : 명령어가 실패하여도 shell script가 계속 실행되도록 지정
+      - name: Stop Docker Container
+        run: sudo docker stop $(sudo docker ps -q) 2>/dev/null || true
+
+      # 최신 이미지를 컨테이너화하여 실행시킨다
+      # --rm : 컨테이너 종료 시 자동으로 컨테이너 삭제
+      # --name : 컨테이너 이름 지정
+      - name: Run Docker container by docker image
+        run: sudo docker run --name ci-cd-demo --rm -d -p 8080:8080 ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest
+
+      # 미사용 이미지 제거
+      - name: Delete old Docker image
+        run: docker system prune -f
