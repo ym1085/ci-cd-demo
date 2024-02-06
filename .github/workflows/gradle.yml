@@ -64,6 +64,14 @@ jobs:
     runs-on: self-hosted
 
     steps:
+      # Private Docker Hub Repo를 사용하기에 Login이 필요할 것 같음
+      # DockerHub 로그인
+      - name: docker login
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_PASSWORD }}
+
       # 최신 이미지를 PULL 받는다
       - name: Pulling Docker image
         run: sudo docker pull ${{ secrets.DOCKERHUB_USERNAME }}/ci-cd-demo:latest
