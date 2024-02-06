@@ -92,7 +92,7 @@ ENTRYPOINT ["java", "-jar", "app.jar"]
 > 🐳 Dockerfile은 Docker 상에서 작동시킬 컨테이너의 구성 정보를 기술하기 위한 청사진이라 할 수 있다.  
 > 기본적으로 docker build 명령어 + Dockerfile을 통해 docker image를 생성한다
 
-### `FROM openjdk:17-jdk-slim`
+### FROM openjdk:17-jdk-slim
  
 ```dockerfile
 FROM openjdk:17-jdk-slim
